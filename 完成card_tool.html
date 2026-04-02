@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>カード整理ツール</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f5f5f3; min-height: 100vh; padding: 20px; color: #1a1a1a; }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; max-width: 1200px; margin-left: auto; margin-right: auto; }
+  h1 { font-size: 16px; font-weight: 500; color: #555; letter-spacing: 0.05em; }
+  .pdf-btn { padding: 7px 18px; font-size: 13px; border: 1px solid #22a06b; border-radius: 6px; background: #22a06b; color: #fff; cursor: pointer; font-family: inherit; font-weight: 500; }
+  .pdf-btn:hover { background: #1a8c5a; }
+  .pdf-btn:disabled { background: #aaa; border-color: #aaa; cursor: not-allowed; }
+  .wrap { display: flex; flex-direction: column; gap: 12px; max-width: 1200px; margin: 0 auto; }
+  .section-label { font-size: 11px; color: #888; margin-bottom: 5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+  .area-a { border: 2px solid #22a06b; border-radius: 10px; padding: 12px; background: #fff; display: flex; gap: 10px; }
+  .area-a textarea { flex: 1; border: 1px solid #ddd; border-radius: 6px; padding: 8px 10px; font-size: 14px; color: #1a1a1a; background: #fafafa; outline: none; resize: none; height: 80px; min-width: 0; width: 100%; font-family: inherit; line-height: 1.6; }
+  .area-a textarea:focus { border-color: #22a06b; background: #fff; }
+  .bottom-row { display: flex; gap: 12px; }
+  .area-b { border: 2px solid #22a06b; border-radius: 10px; padding: 10px; background: #f9fdfb; flex: 1.2; min-height: 320px; position: relative; }
+  .drop-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 13px; color: #bbb; pointer-events: none; text-align: center; line-height: 1.9; }
+  .area-c { border: 2px solid #22a06b; border-radius: 10px; padding: 10px; background: #fff; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .area-add { border: 2px solid #22a06b; border-radius: 10px; padding: 10px; background: #fff; display: flex; gap: 8px; align-items: center; }
+  .area-add input { flex: 1; border: 1px solid #ddd; border-radius: 6px; padding: 7px 10px; font-size: 14px; color: #1a1a1a; background: #fafafa; outline: none; font-family: inherit; }
+  .area-add input:focus { border-color: #22a06b; background: #fff; }
+  .add-btn { padding: 6px 16px; font-size: 13px; border: 1px solid #22a06b; border-radius: 6px; background: transparent; color: #22a06b; cursor: pointer; white-space: nowrap; font-family: inherit; }
+  .add-btn:hover { background: #e8f8f2; }
+  .card { background: #fff; border: 1px solid #22a06b; border-radius: 6px; padding: 6px 10px; font-size: 13px; color: #1a1a1a; cursor: grab; user-select: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card:hover { background: #e8f8f2; }
+  .card-in-b { position: absolute; background: #fff; border: 1px solid #22a06b; border-radius: 6px; padding: 6px 10px; font-size: 13px; color: #1a1a1a; cursor: grab; user-select: none; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .card-in-b:hover { background: #e8f8f2; }
+  .area-b.over { background: #d4f3e8; }
+  .del-btn { margin-left: 8px; font-size: 11px; color: #aaa; cursor: pointer; }
+  .del-btn:hover { color: #e24b4a; }
+  .area-memo { border: 2px solid #22a06b; border-radius: 10px; padding: 12px; background: #fff; }
+  .area-memo textarea { width: 100%; border: 1px solid #ddd; border-radius: 6px; padding: 8px 10px; font-size: 14px; color: #1a1a1a; background: #fafafa; outline: none; resize: none; height: 120px; font-family: inherit; line-height: 1.6; display: block; }
+  .area-memo textarea:focus { border-color: #22a06b; background: #fff; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>カード整理ツール</h1>
+  <button class="pdf-btn" id="pdfBtn" onclick="exportPDF()">PDF 出力</button>
+</div>
+<div class="wrap" id="mainWrap">
+  <div class="area-a">
+    <div style="flex:1">
+      <div class="section-label">A — 課題</div>
+      <textarea placeholder="課題を入力..."></textarea>
+    </div>
+    <div style="flex:1">
+      <div class="section-label">A — タイトル</div>
+      <textarea placeholder="タイトルを入力..."></textarea>
+    </div>
+  </div>
+  <div class="bottom-row">
+    <div class="area-b" id="areaB">
+      <div class="section-label">B — カードをここにドロップ</div>
+      <div class="drop-hint" id="dropHint">Cのカードをここに<br>ドラッグ＆ドロップ</div>
+    </div>
+    <div class="area-c" id="areaC">
+      <div class="section-label">C — カード一覧</div>
+    </div>
+  </div>
+  <div class="area-add" id="areaAdd">
+    <div class="section-label" style="white-space:nowrap;margin-bottom:0;">カード追加</div>
+    <input id="textInput" type="text" placeholder="テキストを入力してカードを追加..." />
+    <button class="add-btn" onclick="addCard()">＋ 追加</button>
+  </div>
+  <div class="area-memo">
+    <div class="section-label">メモ・自由記入欄</div>
+    <textarea placeholder="自由にテキストを入力..."></textarea>
+  </div>
+</div>
+<script>
+const defaultCards = [
+  "文法：句形に配慮した配列",
+  "ジャンル解説＆鳥瞰文学史",
+  "構成と概観＆テーマ型単元",
+  "「私たちの古典受容」の新設",
+  "冒頭単元「〈知〉のコミュニティへ」",
+  "「比較で深める」の拡充",
+  "「活動のプロセス」の新設",
+  "古典世界ビュー＆コラム",
+  "充実した教材ラインナップ"
+];
+
+const areaB = document.getElementById('areaB');
+const areaC = document.getElementById('areaC');
+const dropHint = document.getElementById('dropHint');
+
+let dragEl = null;
+let dragFromB = false;
+let startX = 0, startY = 0, mouseStartX = 0, mouseStartY = 0;
+
+function makeCardC(text) {
+  const d = document.createElement('div');
+  d.className = 'card';
+  d.textContent = text;
+  d.draggable = true;
+  d.addEventListener('dragstart', e => {
+    dragEl = d;
+    dragFromB = false;
+    e.dataTransfer.setData('text/plain', text);
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  d.addEventListener('dragend', () => { dragEl = null; });
+  return d;
+}
+
+function makeCardB(text, x, y) {
+  const d = document.createElement('div');
+  d.className = 'card-in-b';
+  d.style.left = x + 'px';
+  d.style.top = y + 'px';
+  const label = document.createTextNode(text);
+  const del = document.createElement('span');
+  del.className = 'del-btn';
+  del.textContent = '✕';
+  del.onclick = (e) => {
+    e.stopPropagation();
+    areaC.appendChild(makeCardC(text));
+    d.remove();
+    updateHint();
+  };
+  d.appendChild(label);
+  d.appendChild(del);
+  d.draggable = true;
+  d.addEventListener('dragstart', e => {
+    dragEl = d;
+    dragFromB = true;
+    startX = parseInt(d.style.left);
+    startY = parseInt(d.style.top);
+    mouseStartX = e.clientX;
+    mouseStartY = e.clientY;
+    e.dataTransfer.setData('text/plain', text);
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  d.addEventListener('dragend', () => { dragEl = null; dragFromB = false; });
+  return d;
+}
+
+defaultCards.forEach(t => areaC.appendChild(makeCardC(t)));
+
+function addCard() {
+  const inp = document.getElementById('textInput');
+  const txt = inp.value.trim();
+  if (!txt) return;
+  areaC.appendChild(makeCardC(txt));
+  inp.value = '';
+  inp.focus();
+}
+document.getElementById('textInput').addEventListener('keydown', e => { if (e.key === 'Enter') addCard(); });
+
+areaB.addEventListener('dragover', e => { e.preventDefault(); areaB.classList.add('over'); });
+areaB.addEventListener('dragleave', e => { if (!areaB.contains(e.relatedTarget)) areaB.classList.remove('over'); });
+areaB.addEventListener('drop', e => {
+  e.preventDefault();
+  areaB.classList.remove('over');
+  if (!dragEl) return;
+  const bRect = areaB.getBoundingClientRect();
+  if (dragFromB) {
+    const dx = e.clientX - mouseStartX;
+    const dy = e.clientY - mouseStartY;
+    dragEl.style.left = Math.max(0, startX + dx) + 'px';
+    dragEl.style.top = Math.max(28, startY + dy) + 'px';
+  } else {
+    const text = e.dataTransfer.getData('text/plain');
+    const x = Math.max(0, e.clientX - bRect.left - 10);
+    const y = Math.max(28, e.clientY - bRect.top - 10);
+    areaB.appendChild(makeCardB(text, x, y));
+    dragEl.remove();
+    updateHint();
+  }
+});
+
+areaC.addEventListener('dragover', e => e.preventDefault());
+areaC.addEventListener('drop', e => {
+  e.preventDefault();
+  if (!dragEl || !dragFromB) return;
+  const text = e.dataTransfer.getData('text/plain');
+  areaC.appendChild(makeCardC(text));
+  dragEl.remove();
+  dragEl = null;
+  dragFromB = false;
+  updateHint();
+});
+
+function updateHint() {
+  dropHint.style.display = areaB.querySelectorAll('.card-in-b').length > 0 ? 'none' : 'block';
+}
+
+async function exportPDF() {
+  const btn = document.getElementById('pdfBtn');
+  btn.disabled = true;
+  btn.textContent = '出力中...';
+
+  const addArea = document.getElementById('areaAdd');
+  addArea.style.display = 'none';
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const wrap = document.getElementById('mainWrap');
+    const canvas = await html2canvas(wrap, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#f5f5f3',
+      onclone: (doc) => {
+        doc.querySelectorAll('textarea').forEach(ta => {
+          const div = doc.createElement('div');
+          div.style.cssText = ta.style.cssText;
+          div.style.whiteSpace = 'pre-wrap';
+          div.style.wordBreak = 'break-word';
+          div.style.height = ta.offsetHeight + 'px';
+          div.style.width = ta.offsetWidth + 'px';
+          div.style.fontSize = '14px';
+          div.style.padding = '8px 10px';
+          div.style.border = '1px solid #ddd';
+          div.style.borderRadius = '6px';
+          div.style.background = '#fafafa';
+          div.style.fontFamily = 'Helvetica Neue, Arial, sans-serif';
+          div.style.lineHeight = '1.6';
+          div.style.boxSizing = 'border-box';
+          div.textContent = ta.value || ta.placeholder;
+          if (!ta.value) div.style.color = '#bbb';
+          ta.parentNode.replaceChild(div, ta);
+        });
+      }
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = pdf.internal.pageSize.getHeight();
+    const ratio = canvas.height / canvas.width;
+    const imgH = pdfW * ratio;
+    if (imgH <= pdfH) {
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfW, imgH);
+    } else {
+      const scale = pdfH / imgH;
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfW * scale, pdfH);
+    }
+    pdf.save('カード整理ツール.pdf');
+  } catch(e) {
+    alert('PDF出力に失敗しました: ' + e.message);
+  }
+
+  addArea.style.display = '';
+  btn.disabled = false;
+  btn.textContent = 'PDF 出力';
+}
+</script>
+</body>
+</html>
