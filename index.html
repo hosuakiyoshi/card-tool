@@ -99,8 +99,20 @@ let startX = 0, startY = 0, mouseStartX = 0, mouseStartY = 0;
 function makeCardC(text) {
   const d = document.createElement('div');
   d.className = 'card';
-  d.textContent = text;
   d.draggable = true;
+
+  const label = document.createTextNode(text);
+  const del = document.createElement('span');
+  del.className = 'del-btn';
+  del.textContent = '✕';
+  del.onclick = (e) => {
+    e.stopPropagation();
+    d.remove();
+  };
+
+  d.appendChild(label);
+  d.appendChild(del);
+
   d.addEventListener('dragstart', e => {
     dragEl = d;
     dragFromB = false;
